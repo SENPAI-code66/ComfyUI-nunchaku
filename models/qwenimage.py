@@ -698,6 +698,8 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
             additional_t_cond = additional_t_cond.to(dtype=self.dtype, device=device)
 
         hidden_states, img_ids, orig_shape = self.process_img(x)
+        print(f"[Nunchaku QwenImage] After process_img(x): hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype}, device={hidden_states.device}", flush=True)
+        print(f"[Nunchaku QwenImage] img_ids shape={img_ids.shape}, orig_shape={orig_shape}", flush=True)
         num_embeds = hidden_states.shape[1]
 
         timestep_zero_index = None
@@ -731,8 +733,10 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                     w = max(w, ref.shape[-1] + w_offset)
 
                 kontext, kontext_ids, _ = self.process_img(ref, index=index, h_offset=h_offset, w_offset=w_offset)
+                print(f"[Nunchaku QwenImage] Processed ref index={index}: kontext shape={kontext.shape}, dtype={kontext.dtype}, device={kontext.device}", flush=True)
                 hidden_states = torch.cat([hidden_states, kontext], dim=1)
                 img_ids = torch.cat([img_ids, kontext_ids], dim=1)
+            print(f"[Nunchaku QwenImage] After ref_latents loop: hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype}, device={hidden_states.device}", flush=True)
             if timestep_zero:
                 if index > 0:
                     timestep = torch.cat([timestep, timestep * 0], dim=0)
@@ -751,13 +755,16 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         )
         ids = torch.cat((txt_ids, img_ids), dim=1)
         image_rotary_emb = self.pe_embedder(ids).squeeze(1).unsqueeze(2).to(x.dtype)
+        print(f"[Nunchaku QwenImage] image_rotary_emb shape={image_rotary_emb.shape}, dtype={image_rotary_emb.dtype}, device={image_rotary_emb.device}", flush=True)
         del ids, txt_ids, img_ids
 
         hidden_states = self.img_in(hidden_states)
         encoder_hidden_states = self.txt_norm(encoder_hidden_states)
         encoder_hidden_states = self.txt_in(encoder_hidden_states)
+        print(f"[Nunchaku QwenImage] After input projections: hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype} | encoder_hidden_states shape={encoder_hidden_states.shape}, dtype={encoder_hidden_states.dtype}", flush=True)
 
         temb = self.time_text_embed(timestep, hidden_states, additional_t_cond)
+        print(f"[Nunchaku QwenImage] temb shape={temb.shape}, dtype={temb.dtype}, device={temb.device}", flush=True)
 
         patches_replace = transformer_options.get("patches_replace", {})
         blocks_replace = patches_replace.get("dit", {})
@@ -827,12 +834,22 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                         if t > 0:
                             hidden_states[:, :t].add_(add[:, :t], alpha=_scale)
 
+                if i % 10 == 0 or i == len(self.transformer_blocks) - 1:
+                    has_nan_hidden = torch.isnan(hidden_states).any().item()
+                    has_nan_enc = torch.isnan(encoder_hidden_states).any().item()
+                    mean_hidden = hidden_states.float().mean().item()
+                    mean_enc = encoder_hidden_states.float().mean().item()
+                    print(f"[Nunchaku QwenImage] Block {i+1} stats: hidden_states mean={mean_hidden:.4f}, has_nan={has_nan_hidden} | encoder_hidden_states mean={mean_enc:.4f}, has_nan={has_nan_enc}", flush=True)
+
             if self.offload:
                 self.offload_manager.step(compute_stream)
 
         print(f"[Nunchaku QwenImage] Finished blocks loop. Running norm_out and projection...", flush=True)
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)
+        has_nan_out = torch.isnan(hidden_states).any().item()
+        mean_out = hidden_states.float().mean().item()
+        print(f"[Nunchaku QwenImage] After norm_out and proj_out: hidden_states shape={hidden_states.shape}, mean={mean_out:.4f}, has_nan={has_nan_out}", flush=True)
 
         hidden_states = hidden_states[:, :num_embeds].view(
             orig_shape[0], orig_shape[-2] // 2, orig_shape[-1] // 2, orig_shape[1], 2, 2
