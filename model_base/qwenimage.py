@@ -83,6 +83,11 @@ class NunchakuQwenImage(QwenImage):
         if has_fp16:
             from nunchaku.models.transformers.utils import convert_fp16
             convert_fp16(diffusion_model, sd)
+            from nunchaku.utils import is_turing
+            if is_turing():
+                for k in list(sd.keys()):
+                    if isinstance(sd[k], torch.Tensor) and sd[k].is_floating_point():
+                        sd[k] = sd[k].to(torch.float16)
         print("--- AFTER CONVERT DTYPES ---")
         for k in list(sd.keys()):
             if "wscales" in k or "wzeros" in k or "proj_" in k or "img_mod" in k or "txt_mod" in k:

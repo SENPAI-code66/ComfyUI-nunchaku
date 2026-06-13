@@ -574,9 +574,11 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         **kwargs,
     ):
         super(QwenImageTransformer2DModel, self).__init__()
-        if dtype is None:
-            from nunchaku.utils import is_turing
-            dtype = torch.float16 if is_turing() else torch.bfloat16
+        from nunchaku.utils import is_turing
+        if is_turing():
+            dtype = torch.float16
+        elif dtype is None:
+            dtype = torch.bfloat16
         self.dtype = dtype
         self.patch_size = patch_size
         self.out_channels = out_channels or in_channels
