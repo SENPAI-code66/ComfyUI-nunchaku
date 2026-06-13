@@ -675,6 +675,13 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         """
         device = x.device
         print(f"[Nunchaku QwenImage] Entering _forward pass. Input shape: {x.shape}, device: {device}, offload: {self.offload}", flush=True)
+        if ref_latents is not None:
+            ref_info = [f"shape={ref.shape}, dtype={ref.dtype}, device={ref.device}" for ref in ref_latents]
+            print(f"[Nunchaku QwenImage] ref_latents: {ref_info}", flush=True)
+        else:
+            print(f"[Nunchaku QwenImage] ref_latents is None", flush=True)
+        print(f"[Nunchaku QwenImage] context: shape={context.shape}, dtype={context.dtype}, device={context.device}", flush=True)
+        print(f"[Nunchaku QwenImage] timesteps: shape={getattr(timesteps, 'shape', None)}, dtype={getattr(timesteps, 'dtype', None)}, device={getattr(timesteps, 'device', None)}", flush=True)
         if self.offload:
             self.offload_manager.set_device(device)
 
