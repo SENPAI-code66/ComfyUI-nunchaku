@@ -685,15 +685,24 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         if self.offload:
             self.offload_manager.set_device(device)
 
-        timestep = timesteps
-        encoder_hidden_states = context
+        x = x.to(dtype=self.dtype, device=device)
+        if isinstance(timesteps, torch.Tensor):
+            timestep = timesteps.to(dtype=self.dtype, device=device)
+        else:
+            timestep = timesteps
+        encoder_hidden_states = context.to(dtype=self.dtype, device=device)
         encoder_hidden_states_mask = attention_mask
+        if encoder_hidden_states_mask is not None:
+            encoder_hidden_states_mask = encoder_hidden_states_mask.to(device=device)
+        if additional_t_cond is not None:
+            additional_t_cond = additional_t_cond.to(dtype=self.dtype, device=device)
 
         hidden_states, img_ids, orig_shape = self.process_img(x)
         num_embeds = hidden_states.shape[1]
 
         timestep_zero_index = None
         if ref_latents is not None:
+            ref_latents = [ref.to(dtype=self.dtype, device=device) for ref in ref_latents]
             h = 0
             w = 0
             index = 0
