@@ -697,6 +697,13 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         if additional_t_cond is not None:
             additional_t_cond = additional_t_cond.to(dtype=self.dtype, device=device)
 
+        # Verbose NaN checking of inputs right at the start
+        print(f"[Nunchaku QwenImage] Input x has NaNs: {torch.isnan(x).any().item()}", flush=True)
+        print(f"[Nunchaku QwenImage] Input context has NaNs: {torch.isnan(encoder_hidden_states).any().item()}", flush=True)
+        if ref_latents is not None:
+            for i_ref, ref_t in enumerate(ref_latents):
+                print(f"[Nunchaku QwenImage] ref_latent {i_ref} has NaNs: {torch.isnan(ref_t).any().item()}", flush=True)
+
         hidden_states, img_ids, orig_shape = self.process_img(x)
         print(f"[Nunchaku QwenImage] After process_img(x): hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype}, device={hidden_states.device}", flush=True)
         print(f"[Nunchaku QwenImage] img_ids shape={img_ids.shape}, orig_shape={orig_shape}", flush=True)
@@ -756,15 +763,18 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         ids = torch.cat((txt_ids, img_ids), dim=1)
         image_rotary_emb = self.pe_embedder(ids).squeeze(1).unsqueeze(2).to(x.dtype)
         print(f"[Nunchaku QwenImage] image_rotary_emb shape={image_rotary_emb.shape}, dtype={image_rotary_emb.dtype}, device={image_rotary_emb.device}", flush=True)
+        print(f"[Nunchaku QwenImage] image_rotary_emb has NaNs: {torch.isnan(image_rotary_emb).any().item()}", flush=True)
         del ids, txt_ids, img_ids
 
         hidden_states = self.img_in(hidden_states)
         encoder_hidden_states = self.txt_norm(encoder_hidden_states)
         encoder_hidden_states = self.txt_in(encoder_hidden_states)
         print(f"[Nunchaku QwenImage] After input projections: hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype} | encoder_hidden_states shape={encoder_hidden_states.shape}, dtype={encoder_hidden_states.dtype}", flush=True)
+        print(f"[Nunchaku QwenImage] After input projections NaNs: hidden_states has NaNs: {torch.isnan(hidden_states).any().item()} | encoder_hidden_states has NaNs: {torch.isnan(encoder_hidden_states).any().item()}", flush=True)
 
         temb = self.time_text_embed(timestep, hidden_states, additional_t_cond)
         print(f"[Nunchaku QwenImage] temb shape={temb.shape}, dtype={temb.dtype}, device={temb.device}", flush=True)
+        print(f"[Nunchaku QwenImage] temb has NaNs: {torch.isnan(temb).any().item()}", flush=True)
 
         patches_replace = transformer_options.get("patches_replace", {})
         blocks_replace = patches_replace.get("dit", {})

@@ -93,6 +93,14 @@ class NunchakuQwenImage(QwenImage):
             if "wscales" in k or "wzeros" in k or "proj_" in k or "img_mod" in k or "txt_mod" in k:
                 print(f"Checkpoint weight {k} dtype: {sd[k].dtype}")
         diffusion_model.load_state_dict(sd, strict=True)
+        nan_params = []
+        for name, param in diffusion_model.named_parameters():
+            if torch.isnan(param).any().item():
+                nan_params.append(name)
+        if nan_params:
+            print(f"[Nunchaku QwenImage] Warning: The following parameters contain NaNs: {nan_params}", flush=True)
+        else:
+            print(f"[Nunchaku QwenImage] All parameters loaded successfully without NaNs.", flush=True)
         sd.clear()
         import gc
         gc.collect()
