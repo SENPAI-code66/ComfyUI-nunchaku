@@ -137,8 +137,8 @@ class NunchakuQwenImageDiTLoader:
                     ["auto", "enable", "disable"],
                     {
                         "default": "auto",
-                        "tooltip": "Whether to enable CPU offload for the transformer model."
-                        "auto' will enable it if the GPU memory is less than 15G.",
+                        "tooltip": "Whether to enable CPU offload for the transformer model. "
+                        "'auto' will enable it if the GPU memory is less than 24G.",
                     },
                 ),
             },
@@ -199,12 +199,12 @@ class NunchakuQwenImageDiTLoader:
         sd, metadata = safe_load_torch_file(model_path, return_metadata=True)
 
         if cpu_offload == "auto":
-            if get_gpu_memory() < 15:  # 15GB threshold
+            if get_gpu_memory() < 24:  # 24GB threshold
                 cpu_offload_enabled = True
-                logger.info("VRAM < 15GiB, enabling CPU offload")
+                logger.info("VRAM < 24GiB, enabling CPU offload")
             else:
                 cpu_offload_enabled = False
-                logger.info("VRAM > 15GiB, disabling CPU offload")
+                logger.info("VRAM > 24GiB, disabling CPU offload")
         elif cpu_offload == "enable":
             cpu_offload_enabled = True
             logger.info("Enabling CPU offload")

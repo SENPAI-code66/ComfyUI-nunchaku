@@ -72,3 +72,8 @@ class NunchakuQwenImage(QwenImage):
                 if m.wtscale is not None:
                     m.wtscale = sd.pop(f"{n}.wtscale", 1.0)
         diffusion_model.load_state_dict(sd, strict=True)
+        sd.clear()
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()

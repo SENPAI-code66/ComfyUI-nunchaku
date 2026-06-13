@@ -152,6 +152,15 @@ def _load(sd: dict[str, torch.Tensor], metadata: dict[str, str] = {}):
         convert_fp16(model.diffusion_model, patched_sd)
 
     model.load_model_weights(patched_sd, "")
+    patched_sd.clear()
+    if 'new_sd' in locals():
+        new_sd.clear()
+    if 'sd' in locals():
+        sd.clear()
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     return ZImageModelPatcher(model, load_device=load_device, offload_device=offload_device)
 
 
