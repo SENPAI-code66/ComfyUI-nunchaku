@@ -71,10 +71,22 @@ class NunchakuQwenImage(QwenImage):
             if isinstance(m, SVDQW4A4Linear):
                 if m.wtscale is not None:
                     m.wtscale = sd.pop(f"{n}.wtscale", 1.0)
+        print("--- DEBUG DTYPES ---")
+        for name, param in diffusion_model.named_parameters():
+            if "wscales" in name or "wzeros" in name or "proj_" in name or "img_mod" in name or "txt_mod" in name:
+                print(f"Model param {name} dtype: {param.dtype}")
+        for k in list(sd.keys()):
+            if "wscales" in k or "wzeros" in k or "proj_" in k or "img_mod" in k or "txt_mod" in k:
+                print(f"Checkpoint weight {k} dtype: {sd[k].dtype}")
         has_fp16 = any(p.dtype == torch.float16 for p in diffusion_model.parameters())
+        print(f"has_fp16: {has_fp16}")
         if has_fp16:
             from nunchaku.models.transformers.utils import convert_fp16
             convert_fp16(diffusion_model, sd)
+        print("--- AFTER CONVERT DTYPES ---")
+        for k in list(sd.keys()):
+            if "wscales" in k or "wzeros" in k or "proj_" in k or "img_mod" in k or "txt_mod" in k:
+                print(f"Checkpoint weight {k} dtype: {sd[k].dtype}")
         diffusion_model.load_state_dict(sd, strict=True)
         sd.clear()
         import gc
