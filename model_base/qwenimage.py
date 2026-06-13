@@ -89,6 +89,14 @@ class NunchakuQwenImage(QwenImage):
             print(f"[Nunchaku QwenImage] Warning: The following parameters contain NaNs: {nan_params}", flush=True)
         else:
             print(f"[Nunchaku QwenImage] All parameters loaded successfully without NaNs.", flush=True)
+        inf_params = []
+        for name, param in diffusion_model.named_parameters():
+            if torch.isinf(param).any().item():
+                inf_params.append(name)
+        if inf_params:
+            print(f"[Nunchaku QwenImage] Warning: The following parameters contain Infs: {inf_params}", flush=True)
+        else:
+            print(f"[Nunchaku QwenImage] All parameters loaded successfully without Infs.", flush=True)
         sd.clear()
         import gc
         gc.collect()

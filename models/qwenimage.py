@@ -362,6 +362,7 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
         device=None,
         operations=None,
         scale_shift: float = 1.0,
+        block_index: int = 0,
         **kwargs,
     ):
         super().__init__()
@@ -369,6 +370,7 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
         self.dim = dim
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
+        self.block_index = block_index
 
         # Modulation and normalization for image stream
         self.img_mod = nn.Sequential(
@@ -432,6 +434,7 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
         temb: torch.Tensor,
         image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         timestep_zero_index=None,
+        debug_print=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass for the transformer block.
@@ -456,9 +459,29 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
         hidden_states : torch.Tensor
             Updated image stream tensor.
         """
+        if debug_print:
+            def log_tensor_stats(name, t):
+                if not isinstance(t, torch.Tensor):
+                    print(f"[Block 1 Debug] {name}: {t}", flush=True)
+                    return
+                has_nan = torch.isnan(t).any().item()
+                has_inf = torch.isinf(t).any().item()
+                t_float = t.float()
+                t_min = t_float.min().item()
+                t_max = t_float.max().item()
+                t_mean = t_float.mean().item()
+                print(f"[Block 1 Debug] {name}: shape={t.shape}, dtype={t.dtype}, min={t_min:.4f}, max={t_max:.4f}, mean={t_mean:.4f}, has_nan={has_nan}, has_inf={has_inf}", flush=True)
+            
+            log_tensor_stats("Input hidden_states", hidden_states)
+            log_tensor_stats("Input encoder_hidden_states", encoder_hidden_states)
+            log_tensor_stats("Input temb", temb)
+
         # Get modulation parameters for both streams
         img_mod_params = self.img_mod(temb)  # [B, 6*dim]
         txt_mod_params = self.txt_mod(temb)  # [B, 6*dim]
+        if debug_print:
+            log_tensor_stats("img_mod_params (raw)", img_mod_params)
+            log_tensor_stats("txt_mod_params (raw)", txt_mod_params)
 
         # Nunchaku's mod_params is [B, 6*dim] instead of [B, dim*6]
         img_mod_params = (
@@ -474,10 +497,18 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
         # Process image stream - norm1 + modulation
         img_normed = self.img_norm1(hidden_states)
         img_modulated, img_gate1 = self._modulate(img_normed, img_mod1)
+        if debug_print:
+            log_tensor_stats("img_normed", img_normed)
+            log_tensor_stats("img_modulated", img_modulated)
+            log_tensor_stats("img_gate1", img_gate1)
 
         # Process text stream - norm1 + modulation
         txt_normed = self.txt_norm1(encoder_hidden_states)
         txt_modulated, txt_gate1 = self._modulate(txt_normed, txt_mod1)
+        if debug_print:
+            log_tensor_stats("txt_normed", txt_normed)
+            log_tensor_stats("txt_modulated", txt_modulated)
+            log_tensor_stats("txt_gate1", txt_gate1)
 
         # Joint attention computation (DoubleStreamLayerMegatron logic)
         attn_output = self.attn(
@@ -489,22 +520,40 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
 
         # QwenAttnProcessor2_0 returns (img_output, txt_output) when encoder_hidden_states is provided
         img_attn_output, txt_attn_output = attn_output
+        if debug_print:
+            log_tensor_stats("img_attn_output", img_attn_output)
+            log_tensor_stats("txt_attn_output", txt_attn_output)
 
         # Apply attention gates and add residual (like in Megatron)
         hidden_states = hidden_states + img_gate1 * img_attn_output
         encoder_hidden_states = encoder_hidden_states + txt_gate1 * txt_attn_output
+        if debug_print:
+            log_tensor_stats("hidden_states (after attn)", hidden_states)
+            log_tensor_stats("encoder_hidden_states (after attn)", encoder_hidden_states)
 
         # Process image stream - norm2 + MLP
         img_normed2 = self.img_norm2(hidden_states)
         img_modulated2, img_gate2 = self._modulate(img_normed2, img_mod2)
         img_mlp_output = self.img_mlp(img_modulated2)
         hidden_states = hidden_states + img_gate2 * img_mlp_output
+        if debug_print:
+            log_tensor_stats("img_normed2", img_normed2)
+            log_tensor_stats("img_modulated2", img_modulated2)
+            log_tensor_stats("img_gate2", img_gate2)
+            log_tensor_stats("img_mlp_output", img_mlp_output)
+            log_tensor_stats("hidden_states (final)", hidden_states)
 
         # Process text stream - norm2 + MLP
         txt_normed2 = self.txt_norm2(encoder_hidden_states)
         txt_modulated2, txt_gate2 = self._modulate(txt_normed2, txt_mod2)
         txt_mlp_output = self.txt_mlp(txt_modulated2)
         encoder_hidden_states = encoder_hidden_states + txt_gate2 * txt_mlp_output
+        if debug_print:
+            log_tensor_stats("txt_normed2", txt_normed2)
+            log_tensor_stats("txt_modulated2", txt_modulated2)
+            log_tensor_stats("txt_gate2", txt_gate2)
+            log_tensor_stats("txt_mlp_output", txt_mlp_output)
+            log_tensor_stats("encoder_hidden_states (final)", encoder_hidden_states)
 
         return encoder_hidden_states, hidden_states
 
@@ -610,9 +659,10 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                     device=transformer_offload_device if transformer_offload_device is not None else device,
                     operations=operations,
                     scale_shift=scale_shift,
+                    block_index=idx,
                     **kwargs,
                 )
-                for _ in range(num_layers)
+                for idx in range(num_layers)
             ]
         )
 
@@ -697,12 +747,12 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         if additional_t_cond is not None:
             additional_t_cond = additional_t_cond.to(dtype=self.dtype, device=device)
 
-        # Verbose NaN checking of inputs right at the start
-        print(f"[Nunchaku QwenImage] Input x has NaNs: {torch.isnan(x).any().item()}", flush=True)
-        print(f"[Nunchaku QwenImage] Input context has NaNs: {torch.isnan(encoder_hidden_states).any().item()}", flush=True)
+        # Verbose NaN and Inf checking of inputs right at the start
+        print(f"[Nunchaku QwenImage] Input x has NaNs: {torch.isnan(x).any().item()}, has Infs: {torch.isinf(x).any().item()}", flush=True)
+        print(f"[Nunchaku QwenImage] Input context has NaNs: {torch.isnan(encoder_hidden_states).any().item()}, has Infs: {torch.isinf(encoder_hidden_states).any().item()}", flush=True)
         if ref_latents is not None:
             for i_ref, ref_t in enumerate(ref_latents):
-                print(f"[Nunchaku QwenImage] ref_latent {i_ref} has NaNs: {torch.isnan(ref_t).any().item()}", flush=True)
+                print(f"[Nunchaku QwenImage] ref_latent {i_ref} has NaNs: {torch.isnan(ref_t).any().item()}, has Infs: {torch.isinf(ref_t).any().item()}", flush=True)
 
         hidden_states, img_ids, orig_shape = self.process_img(x)
         print(f"[Nunchaku QwenImage] After process_img(x): hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype}, device={hidden_states.device}", flush=True)
@@ -763,18 +813,19 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
         ids = torch.cat((txt_ids, img_ids), dim=1)
         image_rotary_emb = self.pe_embedder(ids).squeeze(1).unsqueeze(2).to(x.dtype)
         print(f"[Nunchaku QwenImage] image_rotary_emb shape={image_rotary_emb.shape}, dtype={image_rotary_emb.dtype}, device={image_rotary_emb.device}", flush=True)
-        print(f"[Nunchaku QwenImage] image_rotary_emb has NaNs: {torch.isnan(image_rotary_emb).any().item()}", flush=True)
+        print(f"[Nunchaku QwenImage] image_rotary_emb has NaNs: {torch.isnan(image_rotary_emb).any().item()}, has Infs: {torch.isinf(image_rotary_emb).any().item()}", flush=True)
         del ids, txt_ids, img_ids
 
         hidden_states = self.img_in(hidden_states)
         encoder_hidden_states = self.txt_norm(encoder_hidden_states)
         encoder_hidden_states = self.txt_in(encoder_hidden_states)
         print(f"[Nunchaku QwenImage] After input projections: hidden_states shape={hidden_states.shape}, dtype={hidden_states.dtype} | encoder_hidden_states shape={encoder_hidden_states.shape}, dtype={encoder_hidden_states.dtype}", flush=True)
-        print(f"[Nunchaku QwenImage] After input projections NaNs: hidden_states has NaNs: {torch.isnan(hidden_states).any().item()} | encoder_hidden_states has NaNs: {torch.isnan(encoder_hidden_states).any().item()}", flush=True)
+        print(f"[Nunchaku QwenImage] After input projections: hidden_states has NaNs: {torch.isnan(hidden_states).any().item()}, has Infs: {torch.isinf(hidden_states).any().item()}", flush=True)
+        print(f"[Nunchaku QwenImage] After input projections: encoder_hidden_states has NaNs: {torch.isnan(encoder_hidden_states).any().item()}, has Infs: {torch.isinf(encoder_hidden_states).any().item()}", flush=True)
 
         temb = self.time_text_embed(timestep, hidden_states, additional_t_cond)
         print(f"[Nunchaku QwenImage] temb shape={temb.shape}, dtype={temb.dtype}, device={temb.device}", flush=True)
-        print(f"[Nunchaku QwenImage] temb has NaNs: {torch.isnan(temb).any().item()}", flush=True)
+        print(f"[Nunchaku QwenImage] temb has NaNs: {torch.isnan(temb).any().item()}, has Infs: {torch.isinf(temb).any().item()}", flush=True)
 
         patches_replace = transformer_options.get("patches_replace", {})
         blocks_replace = patches_replace.get("dit", {})
@@ -799,6 +850,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                             encoder_hidden_states_mask=encoder_hidden_states_mask,
                             temb=args["vec"],
                             image_rotary_emb=args["pe"],
+                            debug_print=(i == 0),
                         )
                         return out
 
@@ -816,6 +868,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                         temb=temb,
                         image_rotary_emb=image_rotary_emb,
                         timestep_zero_index=timestep_zero_index,
+                        debug_print=(i == 0),
                     )
                 # ControlNet helpers(device/dtype-safe residual adds)
                 _control = (
