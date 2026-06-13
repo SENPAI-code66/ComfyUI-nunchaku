@@ -669,6 +669,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
 
         """
         device = x.device
+        print(f"[Nunchaku QwenImage] Entering _forward pass. Input shape: {x.shape}, device: {device}, offload: {self.offload}", flush=True)
         if self.offload:
             self.offload_manager.set_device(device)
 
@@ -746,6 +747,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
             self.offload_manager.initialize(compute_stream)
 
         for i, block in enumerate(self.transformer_blocks):
+            print(f"[Nunchaku QwenImage] Executing block {i+1}/{len(self.transformer_blocks)}...", flush=True)
             with torch.cuda.stream(compute_stream):
                 if self.offload:
                     block = self.offload_manager.get_block(i)
@@ -807,6 +809,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
             if self.offload:
                 self.offload_manager.step(compute_stream)
 
+        print(f"[Nunchaku QwenImage] Finished blocks loop. Running norm_out and projection...", flush=True)
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)
 
@@ -814,6 +817,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
             orig_shape[0], orig_shape[-2] // 2, orig_shape[-1] // 2, orig_shape[1], 2, 2
         )
         hidden_states = hidden_states.permute(0, 3, 1, 4, 2, 5)
+        print(f"[Nunchaku QwenImage] Completed forward pass successfully.", flush=True)
         return hidden_states.reshape(orig_shape)[:, :, :, : x.shape[-2], : x.shape[-1]]
 
     def set_offload(self, offload: bool, **kwargs):
