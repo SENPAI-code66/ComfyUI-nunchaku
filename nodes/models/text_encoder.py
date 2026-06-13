@@ -17,7 +17,7 @@ from torch import nn
 
 from nunchaku import NunchakuT5EncoderModel
 
-from ..utils import folder_paths, get_filename_list, get_full_path_or_raise
+from ..utils import folder_paths, get_filename_list, get_full_path_or_raise, safe_load_torch_file
 
 # Get log level from environment variable (default to INFO)
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -352,7 +352,7 @@ def load_text_encoder_state_dicts(
     state_dicts, metadata_list = [], []
 
     for p in paths:
-        sd, metadata = comfy.utils.load_torch_file(p, safe_load=True, return_metadata=True)
+        sd, metadata = safe_load_torch_file(p, safe_load=True, return_metadata=True)
         state_dicts.append(sd)
         metadata_list.append(metadata)
 

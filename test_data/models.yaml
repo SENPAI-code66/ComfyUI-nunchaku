@@ -102,6 +102,18 @@ models:
     filename: "svdq-{precision}_r128-z-image-turbo.safetensors"
     sub_folder: "diffusion_models"
     new_filename: null
+  - repo_id: "QuantFunc/Nunchaku-Qwen-Image-EDIT-2511"
+    filename: "nunchaku_qwen_image_edit_2511_ultimate_speed_{precision}.safetensors"
+    sub_folder: "diffusion_models"
+    new_filename: null
+  - repo_id: "QuantFunc/Nunchaku-Qwen-Image-EDIT-2511"
+    filename: "nunchaku_qwen_image_edit_2511_balanced_{precision}.safetensors"
+    sub_folder: "diffusion_models"
+    new_filename: null
+  - repo_id: "QuantFunc/Nunchaku-Qwen-Image-EDIT-2511"
+    filename: "nunchaku_qwen_image_edit_2511_best_quality_{precision}.safetensors"
+    sub_folder: "diffusion_models"
+    new_filename: null
   # pulid related
   - repo_id: "guozinan/PuLID"
     filename: "pulid_flux_v0.9.1.safetensors"

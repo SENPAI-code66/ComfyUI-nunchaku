@@ -28,7 +28,7 @@ try:
     NUNCHAKU_SVDQ_MODELS = []
     for model in nunchaku_models_yaml["models"]:
         filename = model["filename"]
-        if not filename.startswith("svdq-"):
+        if model.get("sub_folder") != "diffusion_models":
             continue
         if "{precision}" in filename:
             filename = filename.format(precision=precision)

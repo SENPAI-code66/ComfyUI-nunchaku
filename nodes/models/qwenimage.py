@@ -14,7 +14,7 @@ from nunchaku.utils import check_hardware_compatibility, get_gpu_memory, get_pre
 
 from ...model_configs.qwenimage import NunchakuQwenImage
 from ...model_patcher.common import NunchakuModelPatcher
-from ..utils import get_filename_list, get_full_path_or_raise
+from ..utils import get_filename_list, get_full_path_or_raise, safe_load_torch_file
 
 # Get log level from environment variable (default to INFO)
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -196,7 +196,7 @@ class NunchakuQwenImageDiTLoader:
             A tuple containing the loaded and patched model.
         """
         model_path = get_full_path_or_raise("diffusion_models", model_name)
-        sd, metadata = comfy.utils.load_torch_file(model_path, return_metadata=True)
+        sd, metadata = safe_load_torch_file(model_path, return_metadata=True)
 
         if cpu_offload == "auto":
             if get_gpu_memory() < 15:  # 15GB threshold

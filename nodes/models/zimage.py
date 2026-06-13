@@ -14,7 +14,7 @@ from nunchaku.utils import check_hardware_compatibility, get_precision_from_quan
 
 from ...model_configs.zimage import NunchakuZImage
 from ...model_patcher.zimage import ZImageModelPatcher
-from ..utils import get_filename_list, get_full_path_or_raise
+from ..utils import get_filename_list, get_full_path_or_raise, safe_load_torch_file
 
 
 def _patch_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -210,7 +210,7 @@ class NunchakuZImageDiTLoader:
             A tuple containing the loaded and patched model.
         """
         model_path = get_full_path_or_raise("diffusion_models", model_name)
-        sd, metadata = comfy.utils.load_torch_file(model_path, return_metadata=True)
+        sd, metadata = safe_load_torch_file(model_path, return_metadata=True)
 
         model = _load(sd, metadata=metadata)
 
