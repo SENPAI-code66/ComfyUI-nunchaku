@@ -71,6 +71,10 @@ class NunchakuQwenImage(QwenImage):
             if isinstance(m, SVDQW4A4Linear):
                 if m.wtscale is not None:
                     m.wtscale = sd.pop(f"{n}.wtscale", 1.0)
+        has_fp16 = any(p.dtype == torch.float16 for p in diffusion_model.parameters())
+        if has_fp16:
+            from nunchaku.models.transformers.utils import convert_fp16
+            convert_fp16(diffusion_model, sd)
         diffusion_model.load_state_dict(sd, strict=True)
         sd.clear()
         import gc

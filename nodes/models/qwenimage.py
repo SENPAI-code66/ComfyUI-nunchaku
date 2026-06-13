@@ -10,7 +10,7 @@ import comfy.utils
 import torch
 from comfy import model_detection, model_management
 
-from nunchaku.utils import check_hardware_compatibility, get_gpu_memory, get_precision_from_quantization_config
+from nunchaku.utils import check_hardware_compatibility, get_gpu_memory, get_precision_from_quantization_config, is_turing
 
 from ...model_configs.qwenimage import NunchakuQwenImage
 from ...model_patcher.common import NunchakuModelPatcher
@@ -87,7 +87,11 @@ def load_diffusion_model_state_dict(
     else:
         unet_dtype = dtype
 
-    manual_cast_dtype = None
+    if is_turing():
+        unet_dtype = torch.bfloat16
+        manual_cast_dtype = torch.float16
+    else:
+        manual_cast_dtype = None
     model_config.set_inference_dtype(unet_dtype, manual_cast_dtype)
     model_config.custom_operations = model_options.get("custom_operations", model_config.custom_operations)
     if model_options.get("fp8_optimizations", False):
